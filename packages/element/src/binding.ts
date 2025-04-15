@@ -27,7 +27,9 @@ import {
   PRECISION,
 } from "@excalidraw/math";
 
-import { isPointOnShape } from "@excalidraw/utils/collision";
+import { isPointInShape, isPointOnShape } from "@excalidraw/utils/collision";
+
+import { getEllipseShape, getPolygonShape } from "@excalidraw/utils/shape";
 
 import type { LocalPoint, Radians } from "@excalidraw/math";
 
@@ -885,7 +887,6 @@ export const getHeadingForElbowArrowSnap = (
   otherPoint: Readonly<GlobalPoint>,
   bindableElement: ExcalidrawBindableElement | undefined | null,
   aabb: Bounds | undefined | null,
-  elementsMap: ElementsMap,
   origPoint: GlobalPoint,
   zoom?: AppState["zoom"],
 ): Heading => {
@@ -895,12 +896,7 @@ export const getHeadingForElbowArrowSnap = (
     return otherPointHeading;
   }
 
-  const distance = getDistanceForBinding(
-    origPoint,
-    bindableElement,
-    elementsMap,
-    zoom,
-  );
+  const distance = getDistanceForBinding(origPoint, bindableElement, zoom);
 
   if (!distance) {
     return vectorToHeading(
@@ -914,7 +910,6 @@ export const getHeadingForElbowArrowSnap = (
 const getDistanceForBinding = (
   point: Readonly<GlobalPoint>,
   bindableElement: ExcalidrawBindableElement,
-  elementsMap: ElementsMap,
   zoom?: AppState["zoom"],
 ) => {
   const distance = distanceToBindableElement(bindableElement, point);
@@ -924,8 +919,14 @@ const getDistanceForBinding = (
     bindableElement.height,
     zoom,
   );
+  const isInside = isPointInShape(
+    point,
+    bindableElement.type === "ellipse"
+      ? getEllipseShape(bindableElement)
+      : getPolygonShape(bindableElement),
+  );
 
-  return distance > bindDistance ? null : distance;
+  return distance > bindDistance && !isInside ? null : distance;
 };
 
 export const bindPointToSnapToElementOutline = (
