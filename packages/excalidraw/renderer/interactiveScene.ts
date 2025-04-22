@@ -1,6 +1,7 @@
 import oc from "open-color";
 import {
   pointFrom,
+  pointRotateRads,
   type GlobalPoint,
   type LocalPoint,
   type Radians,
@@ -11,6 +12,7 @@ import {
   FRAME_STYLE,
   THEME,
   arrayToMap,
+  elementCenterPoint,
   invariant,
   throttleRAF,
 } from "@excalidraw/common";
@@ -47,6 +49,7 @@ import {
 
 import {
   getCommonBounds,
+  getDiamondPoints,
   getElementAbsoluteCoords,
 } from "@excalidraw/element/bounds";
 
@@ -63,6 +66,7 @@ import type {
 import type {
   ElementsMap,
   ExcalidrawBindableElement,
+  ExcalidrawDiamondElement,
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawImageElement,
@@ -191,22 +195,138 @@ const strokeRectWithRotation = (
 
 const strokeDiamondWithRotation = (
   context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-  cx: number,
-  cy: number,
-  angle: number,
+  padding: number,
+  element: ExcalidrawDiamondElement,
 ) => {
+  const { width, height } = element;
+  const side = Math.hypot(width, height);
+  const wPaddingMax = (1.8 * (padding * side)) / height;
+  const hPaddingMax = (1.8 * (padding * side)) / width;
+  const [x, y] = pointRotateRads(
+    pointFrom<GlobalPoint>(element.x, element.y),
+    elementCenterPoint(element),
+    element.angle,
+  );
   context.save();
-  context.translate(cx, cy);
-  context.rotate(angle);
-  context.beginPath();
-  context.moveTo(0, height / 2);
-  context.lineTo(width / 2, 0);
-  context.lineTo(0, -height / 2);
-  context.lineTo(-width / 2, 0);
-  context.closePath();
-  context.stroke();
+  context.translate(x, y);
+  context.rotate(element.angle);
+
+  {
+    context.beginPath();
+
+    const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
+      getDiamondPoints(element, wPaddingMax, hPaddingMax);
+    if (element.roundness) {
+      const verticalRadius = getCornerRadius(Math.abs(topX - leftX), element);
+      const horizontalRadius = getCornerRadius(
+        Math.abs(rightY - topY),
+        element,
+      );
+
+      context.moveTo(topX + verticalRadius, topY + horizontalRadius);
+      context.lineTo(rightX - verticalRadius, rightY - horizontalRadius);
+      context.bezierCurveTo(
+        rightX,
+        rightY,
+        rightX,
+        rightY,
+        rightX - verticalRadius,
+        rightY + horizontalRadius,
+      );
+      context.lineTo(bottomX + verticalRadius, bottomY - horizontalRadius);
+      context.bezierCurveTo(
+        bottomX,
+        bottomY,
+        bottomX,
+        bottomY,
+        bottomX - verticalRadius,
+        bottomY - horizontalRadius,
+      );
+      context.lineTo(leftX + verticalRadius, leftY + horizontalRadius);
+      context.bezierCurveTo(
+        leftX,
+        leftY,
+        leftX,
+        leftY,
+        leftX + verticalRadius,
+        leftY - horizontalRadius,
+      );
+      context.lineTo(topX - verticalRadius, topY + horizontalRadius);
+      context.bezierCurveTo(
+        topX,
+        topY,
+        topX,
+        topY,
+        topX + verticalRadius,
+        topY + horizontalRadius,
+      );
+    } else {
+      context.moveTo(topX, topY);
+      context.lineTo(rightX, rightY);
+      context.lineTo(bottomX, bottomY);
+      context.lineTo(leftX, leftY);
+    }
+  }
+
+  {
+    const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
+      getDiamondPoints(element, 5, 5);
+    if (element.roundness) {
+      const verticalRadius = getCornerRadius(Math.abs(topX - leftX), element);
+      const horizontalRadius = getCornerRadius(
+        Math.abs(rightY - topY),
+        element,
+      );
+
+      context.moveTo(topX - verticalRadius, topY + horizontalRadius);
+      context.lineTo(leftX + verticalRadius, leftY - horizontalRadius);
+      context.bezierCurveTo(
+        leftX,
+        leftY,
+        leftX,
+        leftY,
+        leftX + verticalRadius,
+        leftY + horizontalRadius,
+      );
+      context.lineTo(bottomX - verticalRadius, bottomY - horizontalRadius);
+      context.bezierCurveTo(
+        bottomX,
+        bottomY,
+        bottomX,
+        bottomY,
+        bottomX + verticalRadius,
+        bottomY - horizontalRadius,
+      );
+      context.lineTo(rightX - verticalRadius, rightY + horizontalRadius);
+      context.bezierCurveTo(
+        rightX,
+        rightY,
+        rightX,
+        rightY,
+        rightX - verticalRadius,
+        rightY - horizontalRadius,
+      );
+      context.lineTo(topX + verticalRadius, topY + horizontalRadius);
+      context.bezierCurveTo(
+        topX,
+        topY,
+        topX,
+        topY,
+        topX - verticalRadius,
+        topY + horizontalRadius,
+      );
+    } else {
+      context.moveTo(topX, topY);
+      context.lineTo(rightX, rightY);
+      context.lineTo(bottomX, bottomY);
+      context.lineTo(leftX, leftY);
+    }
+
+    context.closePath();
+    context.fill();
+    //context.stroke();
+  }
+
   context.restore();
 };
 
@@ -260,6 +380,7 @@ const renderBindingHighlightForBindableElement = (
   const height = y2 - y1;
 
   context.strokeStyle = "rgba(0,0,0,.05)";
+  context.fillStyle = "rgba(0,0,0,.05)";
   // When zooming out, make line width greater for visibility
   context.lineWidth =
     maxBindingGap(element, element.width, element.height, zoom) -
@@ -294,17 +415,7 @@ const renderBindingHighlightForBindableElement = (
       );
       break;
     case "diamond":
-      const side = Math.hypot(width, height);
-      const wPadding = (padding * side) / height;
-      const hPadding = (padding * side) / width;
-      strokeDiamondWithRotation(
-        context,
-        width + wPadding * 2,
-        height + hPadding * 2,
-        x1 + width / 2,
-        y1 + height / 2,
-        element.angle,
-      );
+      strokeDiamondWithRotation(context, padding, element);
       break;
     case "ellipse":
       strokeEllipseWithRotation(
