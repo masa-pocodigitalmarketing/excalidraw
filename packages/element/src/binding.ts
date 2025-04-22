@@ -46,6 +46,7 @@ import { intersectElementWithLineSegment } from "./collision";
 import { distanceToBindableElement } from "./distance";
 import {
   headingForPointFromElement,
+  headingIsHorizontal,
   vectorToHeading,
   type Heading,
 } from "./heading";
@@ -929,16 +930,23 @@ export const bindPointToSnapToElementOutline = (
 
   let intersection: GlobalPoint | null = null;
   if (elbowed) {
+    const isHorizontal = headingIsHorizontal(
+      headingForPointFromElement(bindableElement, aabb, globalP),
+    );
+    const otherPoint = pointFrom<GlobalPoint>(
+      isHorizontal ? center[0] : edgePoint[0],
+      !isHorizontal ? center[1] : edgePoint[1],
+    );
     intersection = intersectElementWithLineSegment(
       bindableElement,
       lineSegment(
-        center,
+        otherPoint,
         pointFromVector(
           vectorScale(
-            vectorNormalize(vectorFromPoint(edgePoint, center)),
+            vectorNormalize(vectorFromPoint(edgePoint, otherPoint)),
             Math.max(bindableElement.width, bindableElement.height) * 2,
           ),
-          center,
+          otherPoint,
         ),
       ),
     )[0];
