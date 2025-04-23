@@ -881,7 +881,7 @@ export const getHeadingForElbowArrowSnap = (
   return headingForPointFromElement(bindableElement, aabb, p);
 };
 
-export const getDistanceForBinding = (
+const getDistanceForBinding = (
   point: Readonly<GlobalPoint>,
   bindableElement: ExcalidrawBindableElement,
   zoom?: AppState["zoom"],
