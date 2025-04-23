@@ -200,8 +200,8 @@ const strokeDiamondWithRotation = (
 ) => {
   const { width, height } = element;
   const side = Math.hypot(width, height);
-  const wPaddingMax = (1.5 * (padding * side)) / height;
-  const hPaddingMax = (1.5 * (padding * side)) / width;
+  const wPaddingMax = (1.8 * (padding * side)) / height;
+  const hPaddingMax = (1.8 * (padding * side)) / width;
   const [x, y] = pointRotateRads(
     pointFrom<GlobalPoint>(element.x, element.y),
     elementCenterPoint(element),
@@ -268,6 +268,9 @@ const strokeDiamondWithRotation = (
     }
   }
 
+  // Counter-clockwise for the cutout in the middle. We need to have an "inverse
+  // mask" on a filled shape for the diamond highlight, because stroking creates
+  // sharp inset edges on line joins < 90 degrees.
   {
     const [topX, topY, rightX, rightY, bottomX, bottomY, leftX, leftY] =
       getDiamondPoints(element, 5, 5);
@@ -324,7 +327,6 @@ const strokeDiamondWithRotation = (
 
     context.closePath();
     context.fill();
-    //context.stroke();
   }
 
   context.restore();
