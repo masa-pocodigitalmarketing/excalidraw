@@ -886,7 +886,7 @@ export const updateElbowArrowPoints = (
   elementsMap: NonDeletedSceneElementsMap,
   updates: {
     points?: readonly LocalPoint[];
-    fixedSegments?: FixedSegment[] | null;
+    fixedSegments?: readonly FixedSegment[] | null;
     startBinding?: FixedPointBinding | null;
     endBinding?: FixedPointBinding | null;
   },
