@@ -140,6 +140,8 @@ export default defineConfig(({ mode }) => {
         },
 
         workbox: {
+          // Increase precache file size limit to 40MB for large JS assets
+          maximumFileSizeToCacheInBytes: 419430400, // 40MB
           // don't precache fonts, locales and separate chunks
           globIgnores: [
             "fonts.css",

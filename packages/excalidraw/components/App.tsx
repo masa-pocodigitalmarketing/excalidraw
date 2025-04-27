@@ -3112,6 +3112,93 @@ class App extends React.Component<AppProps, AppState> {
           return;
         }
 
+        // --- Image splitting logic added here ---
+        const MAX_CHUNK_SIZE = 8000;
+        const splitImageIntoChunks = async (file: File, maxChunkSize: number) => {
+          // Load the image and draw it on a Canvas, splitting as needed
+          return new Promise<File[]>(async (resolve, reject) => {
+            const img = new window.Image();
+            img.onload = () => {
+              const chunks: File[] = [];
+              const { width, height } = img;
+              const horizontalChunks = Math.ceil(width / maxChunkSize);
+              const verticalChunks = Math.ceil(height / maxChunkSize);
+              for (let y = 0; y < verticalChunks; y++) {
+                for (let x = 0; x < horizontalChunks; x++) {
+                  const chunkWidth = Math.min(maxChunkSize, width - x * maxChunkSize);
+                  const chunkHeight = Math.min(maxChunkSize, height - y * maxChunkSize);
+                  const canvas = document.createElement("canvas");
+                  canvas.width = chunkWidth;
+                  canvas.height = chunkHeight;
+                  const ctx = canvas.getContext("2d");
+                  if (ctx) {
+                    ctx.drawImage(
+                      img,
+                      x * maxChunkSize,
+                      y * maxChunkSize,
+                      chunkWidth,
+                      chunkHeight,
+                      0,
+                      0,
+                      chunkWidth,
+                      chunkHeight
+                    );
+                    canvas.toBlob((blob) => {
+                      if (blob) {
+                        chunks.push(new File([blob], file.name, { type: file.type }));
+                        if (chunks.length === horizontalChunks * verticalChunks) {
+                          resolve(chunks);
+                        }
+                      } else {
+                        reject(new Error("Failed to create blob from canvas"));
+                      }
+                    }, file.type);
+                  } else {
+                    reject(new Error("Failed to get canvas context"));
+                  }
+                }
+              }
+              // If there are no pieces, resolve with an empty array
+              if (horizontalChunks * verticalChunks === 0) resolve([]);
+            };
+            img.onerror = (e) => reject(e);
+            img.src = URL.createObjectURL(file);
+          });
+        };
+
+        let insertedElements: string[] = [];
+        let baseX = sceneX;
+        let baseY = sceneY;
+        try {
+          const chunks = await splitImageIntoChunks(file, MAX_CHUNK_SIZE);
+          if (chunks.length > 1) {
+            // If there are multiple pieces, paste them in a grid
+            let offsetY = 0;
+            for (let v = 0, i = 0; v < Math.ceil(chunks.length ** 0.5); v++) {
+              let offsetX = 0;
+              for (let h = 0; h < Math.ceil(chunks.length / Math.ceil(chunks.length ** 0.5)); h++, i++) {
+                if (i >= chunks.length) break;
+                const chunk = chunks[i];
+                const image = this.createImageElement({ sceneX: baseX + offsetX, sceneY: baseY + offsetY });
+                this.insertImageElement(image, chunk);
+                this.initializeImageDimensions(image);
+                insertedElements.push(image.id);
+                offsetX += MAX_CHUNK_SIZE;
+              }
+              offsetY += MAX_CHUNK_SIZE;
+            }
+            this.setState({
+              selectedElementIds: makeNextSelectedElementIds(
+                Object.fromEntries(insertedElements.map(id => [id, true])),
+                this.state,
+              ),
+            });
+            return;
+          }
+        } catch (e) {
+          // If splitting fails, insert as usual
+        }
+        // Insert as usual if only one image
         const imageElement = this.createImageElement({ sceneX, sceneY });
         this.insertImageElement(imageElement, file);
         this.initializeImageDimensions(imageElement);
@@ -3123,7 +3210,6 @@ class App extends React.Component<AppProps, AppState> {
             this.state,
           ),
         });
-
         return;
       }
 
