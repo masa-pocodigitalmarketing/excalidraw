@@ -3111,15 +3111,18 @@ class App extends React.Component<AppProps, AppState> {
           this.setState({ errorMessage: t("errors.imageToolNotSupported") });
           return;
         }
-
+        if (!file) {
+          this.setState({ errorMessage: t("errors.imageToolNotSupported") });
+          return;
+        }
         // --- Image splitting logic added here ---
         const MAX_CHUNK_SIZE = 8000;
         const splitImageIntoChunks = async (file: File, maxChunkSize: number) => {
           // Load the image and draw it on a Canvas, splitting as needed
-          return new Promise<File[]>(async (resolve, reject) => {
+          return new Promise<{file: File, width: number, height: number}[]>(async (resolve, reject) => {
             const img = new window.Image();
             img.onload = () => {
-              const chunks: File[] = [];
+              const chunks: {file: File, width: number, height: number}[] = [];
               const { width, height } = img;
               const horizontalChunks = Math.ceil(width / maxChunkSize);
               const verticalChunks = Math.ceil(height / maxChunkSize);
@@ -3145,7 +3148,7 @@ class App extends React.Component<AppProps, AppState> {
                     );
                     canvas.toBlob((blob) => {
                       if (blob) {
-                        chunks.push(new File([blob], file.name, { type: file.type }));
+                        chunks.push({ file: new File([blob], file.name, { type: file.type }), width: chunkWidth, height: chunkHeight });
                         if (chunks.length === horizontalChunks * verticalChunks) {
                           resolve(chunks);
                         }
@@ -3172,20 +3175,32 @@ class App extends React.Component<AppProps, AppState> {
         try {
           const chunks = await splitImageIntoChunks(file, MAX_CHUNK_SIZE);
           if (chunks.length > 1) {
-            // If there are multiple pieces, paste them in a grid
-            let offsetY = 0;
-            for (let v = 0, i = 0; v < Math.ceil(chunks.length ** 0.5); v++) {
-              let offsetX = 0;
-              for (let h = 0; h < Math.ceil(chunks.length / Math.ceil(chunks.length ** 0.5)); h++, i++) {
-                if (i >= chunks.length) break;
-                const chunk = chunks[i];
-                const image = this.createImageElement({ sceneX: baseX + offsetX, sceneY: baseY + offsetY });
-                this.insertImageElement(image, chunk);
+            // Arrange chunks in the exact original grid, using each chunk's width and height
+            let insertedElements: string[] = [];
+            const { width: imgWidth, height: imgHeight } = await new Promise<{width: number, height: number}>(resolve => {
+              const tempImg = new window.Image();
+              tempImg.onload = () => resolve({ width: tempImg.width, height: tempImg.height });
+              tempImg.src = URL.createObjectURL(file!);
+            });
+            const horizontalChunks = Math.ceil(imgWidth / MAX_CHUNK_SIZE);
+            const verticalChunks = Math.ceil(imgHeight / MAX_CHUNK_SIZE);
+            // Build 2D array for easier placement
+            let yOffset = 0;
+            for (let y = 0; y < verticalChunks; y++) {
+              let xOffset = 0;
+              let rowHeights = 0;
+              for (let x = 0; x < horizontalChunks; x++) {
+                const idx = y * horizontalChunks + x;
+                if (idx >= chunks.length) break;
+                const chunk = chunks[idx];
+                const image = this.createImageElement({ sceneX: baseX + xOffset, sceneY: baseY + yOffset });
+                this.insertImageElement(image, chunk.file);
                 this.initializeImageDimensions(image);
                 insertedElements.push(image.id);
-                offsetX += MAX_CHUNK_SIZE;
+                xOffset += chunk.width;
+                rowHeights = Math.max(rowHeights, chunk.height);
               }
-              offsetY += MAX_CHUNK_SIZE;
+              yOffset += rowHeights;
             }
             this.setState({
               selectedElementIds: makeNextSelectedElementIds(
